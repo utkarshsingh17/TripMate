@@ -69,6 +69,7 @@ public class ConfirmableToolChatService {
                     .options(OpenAiChatOptions.builder()
                             .model(modelName)
                             .temperature(temp)
+                            .internalToolExecutionEnabled(false)
                             .toolCallbacks(filteredToolCallbacks)
                             .build())
                     .call()
@@ -80,6 +81,7 @@ public class ConfirmableToolChatService {
                     .options(AnthropicChatOptions.builder()
                             .model(modelName)
                             .temperature(Double.parseDouble(temperature))
+                            .internalToolExecutionEnabled(false)
                             .toolCallbacks(filteredToolCallbacks)
                             .build())
                     .call()
@@ -91,6 +93,7 @@ public class ConfirmableToolChatService {
                     .options(DeepSeekChatOptions.builder()
                             .model(modelName)
                             .temperature(Double.parseDouble(temperature))
+                            .internalToolExecutionEnabled(false)
                             .toolCallbacks(filteredToolCallbacks)
                             .build())
                     .call()
@@ -106,7 +109,6 @@ public class ConfirmableToolChatService {
 
     public String confirmTool(String conversationId, boolean approved, String feedback, String modelName) throws Exception {
         ModelProvider provider = determineModelProvider(modelName);
-        ChatOptions options = ChatOptions.builder().model(modelName).build();
 
         if (provider == ModelProvider.OPEN_AI) {
             return openAiChatClient.prompt()
@@ -115,7 +117,10 @@ public class ConfirmableToolChatService {
                     .advisors(a -> a.param("conversationId", conversationId)
                             .param("approved", approved)
                             .param("feedback", feedback == null ? "none" : feedback))
-                    .options(options)
+                    .options(OpenAiChatOptions.builder()
+                            .model(modelName)
+                            .internalToolExecutionEnabled(false)
+                            .build())
                     .call()
                     .content();
         } else if (provider == ModelProvider.ANTHROPIC) {
@@ -125,7 +130,10 @@ public class ConfirmableToolChatService {
                     .advisors(a -> a.param("conversationId", conversationId)
                             .param("approved", approved)
                             .param("feedback", feedback == null ? "none" : feedback))
-                    .options(options)
+                    .options(AnthropicChatOptions.builder()
+                            .model(modelName)
+                            .internalToolExecutionEnabled(false)
+                            .build())
                     .call()
                     .content();
         } else {
@@ -135,7 +143,10 @@ public class ConfirmableToolChatService {
                     .advisors(a -> a.param("conversationId", conversationId)
                             .param("approved", approved)
                             .param("feedback", feedback == null ? "none" : feedback))
-                    .options(options)
+                    .options(DeepSeekChatOptions.builder()
+                            .model(modelName)
+                            .internalToolExecutionEnabled(false)
+                            .build())
                     .call()
                     .content();
         }
