@@ -1,5 +1,6 @@
 package com.utkarsh.tripmate.config;
 
+import com.utkarsh.tripmate.config.properties.McpRetryProperties;
 import com.utkarsh.tripmate.service.AirfareService;
 import com.utkarsh.tripmate.service.BookingService;
 import com.utkarsh.tripmate.service.CurrencyExchangeService;
@@ -40,7 +41,8 @@ public class FunctionCallingConfig {
             RecipeService recipeService,
             BookingService bookingService,
             SpendingLogsService spendingLogsService,
-            ObjectProvider<SyncMcpToolCallbackProvider> mcpToolCallbackProvider) {
+            ObjectProvider<SyncMcpToolCallbackProvider> mcpToolCallbackProvider,
+            McpRetryProperties mcpRetryProperties) {
         List<ToolCallback> toolCallbacks = new ArrayList<>();
 
         toolCallbacks.addAll(List.of(ToolCallbacks.from(
@@ -55,7 +57,7 @@ public class FunctionCallingConfig {
 
         SyncMcpToolCallbackProvider provider = mcpToolCallbackProvider.getIfAvailable();
         if (provider != null) {
-            ToolCallback[] mcpCallbacks = provider.getToolCallbacks();
+            ToolCallback[] mcpCallbacks = fetchMcpCallbacksWithRetry(provider, mcpRetryProperties);
             if (mcpCallbacks != null && mcpCallbacks.length > 0) {
                 toolCallbacks.addAll(Arrays.stream(mcpCallbacks).toList());
             }
@@ -63,5 +65,32 @@ public class FunctionCallingConfig {
 
         log.info("Registered {} total tool callbacks", toolCallbacks.size());
         return toolCallbacks;
+    }
+
+    private ToolCallback[] fetchMcpCallbacksWithRetry(
+            SyncMcpToolCallbackProvider provider,
+            McpRetryProperties retryProperties) {
+        int attempts = Math.max(1, retryProperties.getMaxAttempts());
+        long backoffMillis = Math.max(0, retryProperties.getBackoffMillis());
+        RuntimeException lastException = null;
+
+        for (int attempt = 1; attempt <= attempts; attempt++) {
+            try {
+                return provider.getToolCallbacks();
+            } catch (RuntimeException ex) {
+                lastException = ex;
+                log.warn("Failed to load MCP callbacks (attempt {}/{}): {}", attempt, attempts, ex.getMessage());
+                if (attempt < attempts && backoffMillis > 0) {
+                    try {
+                        Thread.sleep(backoffMillis);
+                    } catch (InterruptedException interruptedException) {
+                        Thread.currentThread().interrupt();
+                        throw new IllegalStateException("Interrupted while retrying MCP callback registration", interruptedException);
+                    }
+                }
+            }
+        }
+
+        throw new IllegalStateException("Unable to fetch MCP callbacks after retries", lastException);
     }
 }
