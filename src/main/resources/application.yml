@@ -1,6 +1,18 @@
 spring:
   application:
     name: tripmate
+  datasource:
+    url: jdbc:postgresql://localhost:5432/postgres
+    username: user
+    password: password
+  ai:
+    vectorstore:
+      pgvector:
+        initialize-schema: true
+        index-type: HNSW
+        distance-type: COSINE_DISTANCE
+        dimensions: 1536
+        max-document-batch-size: 10000
 
 server:
   servlet:
