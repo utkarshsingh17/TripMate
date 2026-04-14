@@ -30,3 +30,8 @@ management:
     web:
       exposure:
         include: '*'
+
+rag:
+  topK: 5
+  similarity-threshold: 0.1
+  delete-previous-related-embeddings: false
