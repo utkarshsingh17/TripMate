@@ -7,10 +7,25 @@ spring:
     password: password
   ai:
     openai:
+      chat:
+        options:
+          model: gpt-5-mini
+          temperature: 0.3
       embedding:
         enabled: true
         options:
           model: text-embedding-3-small
+    anthropic:
+      chat:
+        options:
+          model: claude-haiku-4-5
+          temperature: 0.3
+          max-tokens: 4000
+    deepseek:
+      chat:
+        options:
+          model: deepseek-chat
+          temperature: 0.3
     mcp:
       client:
         enabled: true
