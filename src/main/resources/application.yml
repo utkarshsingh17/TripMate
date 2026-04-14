@@ -35,3 +35,21 @@ rag:
   topK: 5
   similarity-threshold: 0.1
   delete-previous-related-embeddings: false
+
+weather:
+  visualcrossing:
+    url: https://weather.visualcrossing.com/VisualCrossingWebServices/rest/services/timeline
+    apiKey: ${VISUALCROSSING_API_KEY:}
+
+flight:
+  amadeus:
+    url-root: https://test.api.amadeus.com
+    url-reference-airports: ${flight.amadeus.url-root}/v1/reference-data/locations/airports
+    url-shopping: ${flight.amadeus.url-root}/v2/shopping/flight-offers
+    url-security: ${flight.amadeus.url-root}/v1/security/oauth2/token
+    client-id: ${AMADEUS_CLIENT_ID:}
+    client-secret: ${AMADEUS_CLIENT_SECRET:}
+
+currency-exchange:
+  vat-comply:
+    url: https://api.vatcomply.com/rates
