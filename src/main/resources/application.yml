@@ -6,6 +6,11 @@ spring:
     username: user
     password: password
   ai:
+    openai:
+      embedding:
+        enabled: true
+        options:
+          model: text-embedding-3-small
     mcp:
       client:
         enabled: true
@@ -53,13 +58,11 @@ weather:
     apiKey: ${VISUALCROSSING_API_KEY:}
 
 flight:
-  amadeus:
-    url-root: https://test.api.amadeus.com
-    url-reference-airports: ${flight.amadeus.url-root}/v1/reference-data/locations/airports
-    url-shopping: ${flight.amadeus.url-root}/v2/shopping/flight-offers
-    url-security: ${flight.amadeus.url-root}/v1/security/oauth2/token
-    client-id: ${AMADEUS_CLIENT_ID:}
-    client-secret: ${AMADEUS_CLIENT_SECRET:}
+  aviationstack:
+    url-root: https://api.aviationstack.com/v1
+    url-airports: ${flight.aviationstack.url-root}/airports
+    url-flights: ${flight.aviationstack.url-root}/flights
+    access-key: ${AVIATIONSTACK_ACCESS_KEY:}
 
 currency-exchange:
   vat-comply:

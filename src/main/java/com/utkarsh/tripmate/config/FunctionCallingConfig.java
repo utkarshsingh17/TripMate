@@ -55,7 +55,13 @@ public class FunctionCallingConfig {
                 spendingLogsService
         )));
 
-        SyncMcpToolCallbackProvider provider = mcpToolCallbackProvider.getIfAvailable();
+        SyncMcpToolCallbackProvider provider;
+        try {
+            provider = mcpToolCallbackProvider.getIfAvailable();
+        } catch (Exception ex) {
+            log.warn("MCP callback provider is not available at startup: {}", ex.getMessage());
+            provider = null;
+        }
         if (provider != null) {
             ToolCallback[] mcpCallbacks = fetchMcpCallbacksWithRetry(provider, mcpRetryProperties);
             if (mcpCallbacks != null && mcpCallbacks.length > 0) {
@@ -72,12 +78,12 @@ public class FunctionCallingConfig {
             McpRetryProperties retryProperties) {
         int attempts = Math.max(1, retryProperties.getMaxAttempts());
         long backoffMillis = Math.max(0, retryProperties.getBackoffMillis());
-        RuntimeException lastException = null;
+        Exception lastException = null;
 
         for (int attempt = 1; attempt <= attempts; attempt++) {
             try {
                 return provider.getToolCallbacks();
-            } catch (RuntimeException ex) {
+            } catch (Exception ex) {
                 lastException = ex;
                 log.warn("Failed to load MCP callbacks (attempt {}/{}): {}", attempt, attempts, ex.getMessage());
                 if (attempt < attempts && backoffMillis > 0) {
@@ -91,6 +97,8 @@ public class FunctionCallingConfig {
             }
         }
 
-        throw new IllegalStateException("Unable to fetch MCP callbacks after retries", lastException);
+        log.warn("Proceeding without MCP callbacks after {} attempts: {}", attempts,
+                lastException == null ? "unknown error" : lastException.getMessage());
+        return new ToolCallback[0];
     }
 }

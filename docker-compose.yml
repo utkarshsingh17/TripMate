@@ -1,6 +1,7 @@
 services:
   db:
     image: pgvector/pgvector:pg16
+    container_name: tripmate-db
     ports:
       - "5432:5432"
     environment:
@@ -10,6 +11,59 @@ services:
     volumes:
       - pgdata:/var/lib/postgresql/data
       - ./init-pgvector.sql:/docker-entrypoint-initdb.d/init-pgvector.sql
+    networks:
+      - tripmate-net
+
+  planner:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: tripmate-planner
+    ports:
+      - "8080:8080"
+      - "5005:5005"
+    depends_on:
+      - db
+      - mcp-airbnb
+    environment:
+      JAVA_TOOL_OPTIONS: -agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5005
+      spring.datasource.url: jdbc:postgresql://db:5432/postgres
+      spring.ai.mcp.client.enabled: "true"
+      spring.ai.mcp.client.sse.connections.airbnb-mcp-server.url: http://mcp-airbnb:8090
+      spring.ai.openai.apiKey: ${OPENAI_API_KEY}
+      spring.ai.anthropic.apiKey: ${ANTHROPIC_API_KEY}
+      spring.ai.deepseek.apiKey: ${DEEPSEEK_API_KEY}
+      weather.visualcrossing.apiKey: ${VISUALCROSSING_API_KEY}
+      flight.aviationstack.access-key: ${AVIATIONSTACK_ACCESS_KEY}
+    networks:
+      - tripmate-net
+
+  mcp-airbnb:
+    build:
+      context: ../airbnb-mcp-server
+      dockerfile: Dockerfile
+    container_name: tripmate-mcp-airbnb
+    ports:
+      - "8090:8090"
+    networks:
+      - tripmate-net
+
+  ui:
+    build:
+      context: ${LISTENER_ROOT}
+    container_name: tripmate-ui
+    ports:
+      - "8070:8070"
+    depends_on:
+      - planner
+    environment:
+      backend-host: http://planner:8080
+    networks:
+      - tripmate-net
 
 volumes:
   pgdata:
+
+networks:
+  tripmate-net:
+    driver: bridge

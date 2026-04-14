@@ -6,22 +6,15 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.utkarsh.tripmate.config.properties.FlightProperties;
 import org.springframework.ai.tool.annotation.Tool;
 import org.springframework.ai.tool.annotation.ToolParam;
-import org.springframework.http.HttpEntity;
-import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
-import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
-import org.springframework.util.LinkedMultiValueMap;
-import org.springframework.util.MultiValueMap;
 import org.springframework.web.client.RestTemplate;
 
-import java.time.LocalDate;
+import java.time.LocalDateTime;
 
 @Service
 public class AirfareService {
-
-    private static final String GRANT_TYPE_CLIENT_CREDENTIALS = "client_credentials";
 
     private final FlightProperties flightProperties;
     private final RestTemplate restTemplate;
@@ -53,78 +46,107 @@ public class AirfareService {
             @JsonPropertyDescription("Currency of returned airfare.") Currency currency) {
     }
 
-    @Tool(name = "airfareService", description = "Computes airfare between origin and destination using Amadeus APIs")
+    @Tool(name = "airfareService", description = "Computes estimated airfare between origin and destination using Aviationstack data")
     public Response getAirfare(@ToolParam Request request) {
         String originCode = getClosestAirportIata(request.originLatitude(), request.originLongitude());
         String destinationCode = getClosestAirportIata(request.destinationLatitude(), request.destinationLongitude());
-        double fare = fetchLowestFare(originCode, destinationCode, request.month(), request.year());
+        double fare = estimateFareFromAviationData(
+                request.originLatitude(),
+                request.originLongitude(),
+                request.destinationLatitude(),
+                request.destinationLongitude(),
+                originCode,
+                destinationCode);
         return new Response(fare, request.currency());
     }
 
     private String getClosestAirportIata(double lat, double lon) {
-        String url = flightProperties.getAmadeus().getUrlReferenceAirports()
-                + "?latitude=" + lat + "&longitude=" + lon;
+        String url = flightProperties.getAviationstack().getUrlAirports()
+                + "?access_key=" + flightProperties.getAviationstack().getAccessKey()
+                + "&limit=100";
         ResponseEntity<JsonNode> response = restTemplate.exchange(
-                url, HttpMethod.GET, new HttpEntity<>(buildAuthHeader()), JsonNode.class);
+                url, HttpMethod.GET, null, JsonNode.class);
         JsonNode data = response.getBody() == null ? null : response.getBody().get("data");
         if (data == null || !data.isArray() || data.isEmpty()) {
             throw new IllegalStateException("No airport found for coordinates");
         }
-        JsonNode code = data.get(0).get("iataCode");
-        if (code == null || code.asText().isBlank()) {
-            throw new IllegalStateException("No IATA code found in airport lookup");
-        }
-        return code.asText();
-    }
 
-    private double fetchLowestFare(String originCode, String destinationCode, int month, int year) {
-        LocalDate midMonth = LocalDate.of(year, month, 15);
-        String url = flightProperties.getAmadeus().getUrlShopping()
-                + "?originLocationCode=" + originCode
-                + "&destinationLocationCode=" + destinationCode
-                + "&departureDate=" + midMonth
-                + "&adults=1&max=10";
-        ResponseEntity<JsonNode> response = restTemplate.exchange(
-                url, HttpMethod.GET, new HttpEntity<>(buildAuthHeader()), JsonNode.class);
-        JsonNode offers = response.getBody() == null ? null : response.getBody().get("data");
-        if (offers == null || !offers.isArray() || offers.isEmpty()) {
-            throw new IllegalStateException("No flight offers returned by Amadeus");
-        }
-
-        double minFare = Double.MAX_VALUE;
-        for (JsonNode offer : offers) {
-            JsonNode total = offer.path("price").path("total");
-            if (!total.isMissingNode()) {
-                minFare = Math.min(minFare, total.asDouble());
+        String bestCode = null;
+        double bestDistance = Double.MAX_VALUE;
+        for (JsonNode airport : data) {
+            JsonNode latNode = airport.get("latitude");
+            JsonNode lonNode = airport.get("longitude");
+            String iata = getTextValue(airport, "iata_code");
+            if (latNode == null || lonNode == null || iata == null || iata.isBlank()) {
+                continue;
+            }
+            double distance = haversineMiles(lat, lon, latNode.asDouble(), lonNode.asDouble());
+            if (distance < bestDistance) {
+                bestDistance = distance;
+                bestCode = iata;
             }
         }
-        if (minFare == Double.MAX_VALUE) {
-            throw new IllegalStateException("Unable to parse fares from Amadeus response");
+        if (bestCode == null) {
+            throw new IllegalStateException("No IATA code found in Aviationstack airport lookup");
         }
-        return minFare;
+        return bestCode;
     }
 
-    private String getBearerToken() {
-        String url = flightProperties.getAmadeus().getUrlSecurity();
-        HttpHeaders headers = new HttpHeaders();
-        headers.setContentType(MediaType.APPLICATION_FORM_URLENCODED);
-        MultiValueMap<String, String> body = new LinkedMultiValueMap<>();
-        body.add("grant_type", GRANT_TYPE_CLIENT_CREDENTIALS);
-        body.add("client_id", flightProperties.getAmadeus().getClientId());
-        body.add("client_secret", flightProperties.getAmadeus().getClientSecret());
+    private double estimateFareFromAviationData(
+            double originLat,
+            double originLon,
+            double destinationLat,
+            double destinationLon,
+            String originCode,
+            String destinationCode) {
+        double distanceMiles = haversineMiles(originLat, originLon, destinationLat, destinationLon);
+        double baseFare = 65.0 + (distanceMiles * 0.18);
+        double scheduleAdjustment = getScheduleAdjustment(originCode, destinationCode);
+        return Math.round((baseFare + scheduleAdjustment) * 100.0) / 100.0;
+    }
 
+    private double getScheduleAdjustment(String originCode, String destinationCode) {
+        LocalDateTime now = LocalDateTime.now();
+        String date = now.toLocalDate().toString();
+        String url = flightProperties.getAviationstack().getUrlFlights()
+                + "?access_key=" + flightProperties.getAviationstack().getAccessKey()
+                + "&dep_iata=" + originCode
+                + "&arr_iata=" + destinationCode
+                + "&flight_date=" + date
+                + "&limit=20";
         ResponseEntity<JsonNode> response = restTemplate.exchange(
-                url, HttpMethod.POST, new HttpEntity<>(body, headers), JsonNode.class);
-        JsonNode token = response.getBody() == null ? null : response.getBody().get("access_token");
-        if (token == null || token.asText().isBlank()) {
-            throw new IllegalStateException("Unable to obtain Amadeus OAuth token");
+                url, HttpMethod.GET, null, JsonNode.class);
+        JsonNode flights = response.getBody() == null ? null : response.getBody().get("data");
+        if (flights == null || !flights.isArray() || flights.isEmpty()) {
+            return 25.0;
         }
-        return token.asText();
+
+        int activeFlights = 0;
+        for (JsonNode flight : flights) {
+            String status = getTextValue(flight, "flight_status");
+            if (status != null && (status.equalsIgnoreCase("scheduled") || status.equalsIgnoreCase("active"))) {
+                activeFlights++;
+            }
+        }
+        return activeFlights >= 8 ? 40.0 : activeFlights >= 3 ? 20.0 : 10.0;
     }
 
-    private HttpHeaders buildAuthHeader() {
-        HttpHeaders headers = new HttpHeaders();
-        headers.setBearerAuth(getBearerToken());
-        return headers;
+    private String getTextValue(JsonNode node, String field) {
+        JsonNode value = node.get(field);
+        if (value == null || value.isNull()) {
+            return null;
+        }
+        return value.asText();
+    }
+
+    private double haversineMiles(double lat1, double lon1, double lat2, double lon2) {
+        final double earthRadiusMiles = 3958.7613;
+        double dLat = Math.toRadians(lat2 - lat1);
+        double dLon = Math.toRadians(lon2 - lon1);
+        double a = Math.sin(dLat / 2) * Math.sin(dLat / 2)
+                + Math.cos(Math.toRadians(lat1)) * Math.cos(Math.toRadians(lat2))
+                * Math.sin(dLon / 2) * Math.sin(dLon / 2);
+        double c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+        return earthRadiusMiles * c;
     }
 }

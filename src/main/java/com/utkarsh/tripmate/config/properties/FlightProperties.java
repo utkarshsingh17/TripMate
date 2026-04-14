@@ -7,23 +7,21 @@ import org.springframework.stereotype.Component;
 @ConfigurationProperties(prefix = "flight")
 public class FlightProperties {
 
-    private Amadeus amadeus = new Amadeus();
+    private Aviationstack aviationstack = new Aviationstack();
 
-    public Amadeus getAmadeus() {
-        return amadeus;
+    public Aviationstack getAviationstack() {
+        return aviationstack;
     }
 
-    public void setAmadeus(Amadeus amadeus) {
-        this.amadeus = amadeus;
+    public void setAviationstack(Aviationstack aviationstack) {
+        this.aviationstack = aviationstack;
     }
 
-    public static class Amadeus {
+    public static class Aviationstack {
         private String urlRoot;
-        private String urlReferenceAirports;
-        private String urlShopping;
-        private String urlSecurity;
-        private String clientId;
-        private String clientSecret;
+        private String urlAirports;
+        private String urlFlights;
+        private String accessKey;
 
         public String getUrlRoot() {
             return urlRoot;
@@ -33,44 +31,28 @@ public class FlightProperties {
             this.urlRoot = urlRoot;
         }
 
-        public String getUrlReferenceAirports() {
-            return urlReferenceAirports;
+        public String getUrlAirports() {
+            return urlAirports;
         }
 
-        public void setUrlReferenceAirports(String urlReferenceAirports) {
-            this.urlReferenceAirports = urlReferenceAirports;
+        public void setUrlAirports(String urlAirports) {
+            this.urlAirports = urlAirports;
         }
 
-        public String getUrlShopping() {
-            return urlShopping;
+        public String getUrlFlights() {
+            return urlFlights;
         }
 
-        public void setUrlShopping(String urlShopping) {
-            this.urlShopping = urlShopping;
+        public void setUrlFlights(String urlFlights) {
+            this.urlFlights = urlFlights;
         }
 
-        public String getUrlSecurity() {
-            return urlSecurity;
+        public String getAccessKey() {
+            return accessKey;
         }
 
-        public void setUrlSecurity(String urlSecurity) {
-            this.urlSecurity = urlSecurity;
-        }
-
-        public String getClientId() {
-            return clientId;
-        }
-
-        public void setClientId(String clientId) {
-            this.clientId = clientId;
-        }
-
-        public String getClientSecret() {
-            return clientSecret;
-        }
-
-        public void setClientSecret(String clientSecret) {
-            this.clientSecret = clientSecret;
+        public void setAccessKey(String accessKey) {
+            this.accessKey = accessKey;
         }
     }
 }

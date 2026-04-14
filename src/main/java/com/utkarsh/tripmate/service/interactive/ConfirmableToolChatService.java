@@ -11,12 +11,16 @@ import org.springframework.ai.openai.OpenAiChatOptions;
 import org.springframework.ai.tool.ToolCallback;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.List;
 import java.util.stream.Collectors;
 
 @Service
 public class ConfirmableToolChatService {
+
+    private static final Logger log = LoggerFactory.getLogger(ConfirmableToolChatService.class);
 
     private static final String SYSTEM_MESSAGE =
             "Use all available tools to answer the request. If confirmation is required, ask before executing tools.";
@@ -41,9 +45,15 @@ public class ConfirmableToolChatService {
     }
 
     public String chat(String userMessage, int userSuppliedTopK, String modelName, String temperature) throws Exception {
-        List<ToolCallback> filteredToolCallbacks = ragService.getRagCandidateToolCallbackList(
-                userMessage,
-                userSuppliedTopK <= 0 ? ragProperties.getTopK() : userSuppliedTopK);
+        List<ToolCallback> filteredToolCallbacks;
+        try {
+            filteredToolCallbacks = ragService.getRagCandidateToolCallbackList(
+                    userMessage,
+                    userSuppliedTopK <= 0 ? ragProperties.getTopK() : userSuppliedTopK);
+        } catch (Exception e) {
+            log.warn("RAG filtering failed, falling back to full tool list: {}", e.getMessage());
+            filteredToolCallbacks = ragService.getAvailableToolCallbackList();
+        }
 
         if (filteredToolCallbacks == null || filteredToolCallbacks.isEmpty()) {
             filteredToolCallbacks = ragService.getAvailableToolCallbackList();
@@ -132,9 +142,15 @@ public class ConfirmableToolChatService {
     }
 
     public List<String> getFilteredToolNamesForPrompt(String userMessage, Integer topK) {
-        List<ToolCallback> callbacks = ragService.getRagCandidateToolCallbackList(
-                userMessage,
-                topK == null || topK <= 0 ? ragProperties.getTopK() : topK);
+        List<ToolCallback> callbacks;
+        try {
+            callbacks = ragService.getRagCandidateToolCallbackList(
+                    userMessage,
+                    topK == null || topK <= 0 ? ragProperties.getTopK() : topK);
+        } catch (Exception e) {
+            log.warn("Unable to compute filtered tool names via RAG: {}", e.getMessage());
+            callbacks = ragService.getAvailableToolCallbackList();
+        }
         return callbacks.stream()
                 .map(tc -> tc.getToolDefinition().name())
                 .collect(Collectors.toList());
