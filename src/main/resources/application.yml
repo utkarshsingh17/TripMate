@@ -1,0 +1,20 @@
+spring:
+  application:
+    name: tripmate
+
+server:
+  servlet:
+    context-path: /planner
+  port: 8080
+
+logging:
+  config: classpath:log4j2.xml
+
+management:
+  endpoint:
+    health:
+      show-details: ALWAYS
+  endpoints:
+    web:
+      exposure:
+        include: '*'
